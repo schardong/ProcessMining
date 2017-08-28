@@ -77,6 +77,8 @@ def UpdateMaxValues(number_of_cases, case_datas, cf):
         cf.max_numberofoffers = np.fmax(cf.max_numberofoffers, case_datas[i].numberofoffers)
 
 
+
+#OUR MEASURE
 def CompositeDistance(a, b, cf, jaccard, editdist):
 
     return 1.0 - (math.exp(-cf.coef_creditscore * abs(a.creditscore - b.creditscore) / cf.max_creditscore) *
