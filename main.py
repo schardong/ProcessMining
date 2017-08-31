@@ -17,6 +17,9 @@ if __name__ == '__main__':
     #cf.loangoal = 1.0
     #cf.editdist = 1.0
     # cf.jaccard = 1.0
+
+    #click botão esquerdo para selecionar e tecle s para salvar
+
     weights = [1.0,0.5,0.0,0.5,1.0,0.0]
     #sample size
     size = 10000
