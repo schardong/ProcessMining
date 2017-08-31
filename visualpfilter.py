@@ -10,9 +10,9 @@ from matplotlib.figure import Figure
 class VisualProcessFilter(object):
     def __init__(self, s_argv):
         self.app = QtWidgets.QApplication(sys.argv)
-        self.ui = window.Ui_MainWindow(QtWidgets.QMainWindow(), self)
-        self.ui.setupUi()
-    
+        self.mainwindow = window.MainWindow(self)
+        self.ui = self.mainwindow.GetUI()
+        
     def Init(self):
         weights = [1.0,50,0.0,0.5,1.0,0.0]
         weights_name = ["Credit Score","Request Amount","Number Of Offers", "Loan Goal", "Edit Distance", "Jaccard"]
