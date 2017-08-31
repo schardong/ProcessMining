@@ -49,6 +49,7 @@ class chart(object):
         self.pos = []
         self.selected = []
         self.title = title
+        self.colors = [(0,0,1,1),(1,0,0,1),(0.48,0.98,0,1)]
 
     def distance(self, point, event):
         assert point.shape == (2,), "distance: point.shape is wrong: %s, must be (3,)" % point.shape
@@ -92,6 +93,13 @@ class chart(object):
         self.fig.canvas.draw()
         self.clicked = True
 
+    def buttonClear(self,event):
+        if event.button == 3:
+            for i in self.selected:
+                self.coll._facecolors[i, :] = self.colors[int(self.endsit[i])]
+            self.selected = []
+            self.fig.canvas.draw()
+
     def buttonRelease(self, event):
         if event.button == 1:
             self.clicked = False
@@ -99,6 +107,7 @@ class chart(object):
     def drawPlot(self, size, pos, endsit):
         self.pos = pos
         self.fig, self.ax = plt.subplots()
+        self.endsit = endsit
         labels = ['Aproved', 'Denied', 'Canceled']
         self.coll = self.ax.scatter(pos[:, 0], pos[:, 1], c=endsit, cmap='brg', picker=5, alpha=0.7,
                                       edgecolors='none')
@@ -109,6 +118,7 @@ class chart(object):
         self.ax.legend(handles=[green_patch, red_patch, blue_patch])
         self.fig.canvas.mpl_connect('pick_event', self.buttonClick)
         self.fig.canvas.mpl_connect('motion_notify_event', self.onHover)
+        self.fig.canvas.mpl_connect('button_press_event',self.buttonClear)
         self.fig.canvas.mpl_connect('button_release_event', self.buttonRelease)
         self.fig.canvas.mpl_connect('key_press_event', self.keyPressed)
         plt.title(self.title)
