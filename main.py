@@ -19,10 +19,10 @@ if __name__ == '__main__':
     # cf.jaccard = 1.0
 
     #click botão esquerdo para selecionar e tecle s para salvar
-
+    #click botão direito para limpar
     weights = [1.0,0.5,0.0,0.5,1.0,0.0]
     #sample size
-    size = 10000
+    size = 200
 
 
     #params = size of sample set and list of weight
