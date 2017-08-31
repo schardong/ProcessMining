@@ -17,6 +17,9 @@ from numpy import arange, sin, pi
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+import dataprovider
+import mds
+
 class MyMplCanvas(FigureCanvas):
     """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""
     def __init__(self, parent=None, width=5, height=4, dpi=100):
@@ -38,11 +41,14 @@ class MyMplCanvas(FigureCanvas):
         pass
 
 class ActivityCheckBox():
-    def __init__(self, ckb_name, wgt_parent):
+    def __init__(self, ckb_name, wgt_parent, report_cb):
+        self.obj_name = ckb_name
+        self.report_cb = report_cb
         self.parent = wgt_parent
         self.checkBox = QtWidgets.QCheckBox(self.parent)
         self.checkBox.setObjectName(ckb_name)
-
+        self.checkBox.stateChanged.connect(self.StateChanged)       
+        
     def AddWidget(self, layout_reference):
         self.refence = layout_reference
         self.refence.addWidget(self.checkBox)
@@ -52,14 +58,34 @@ class ActivityCheckBox():
         self.checkBox.deleteLater()
         self.checkBox = None
         
-    def SetText(self, text, translate):
+    def SetText(self, text):
         self.text = text
+        
+    def UpdateLabel(self, translate):
         self.checkBox.setText(translate("MainWindow", self.text))
         
+    def SetCheckState(self, state):
+        assert(state == QtCore.Qt.Checked or state == QtCore.Qt.Unchecked)
+        self.state = state
+        self.checkBox.setCheckState(state)
+        
+    ''' stateChanged Qt Signal connected from QCheckBox
+        CheckState:
+            Qt.Unchecked        0
+            Qt.PartiallyChecked	1
+            Qt.Checked          2
+    '''
+    def StateChanged(self, state):
+        assert(state == QtCore.Qt.Checked or state == QtCore.Qt.Unchecked)
+        self.state = state
+        self.report_cb(self.obj_name, self.state)
+        
 class SliderFeatureController():
-    def __init__(self, obj_name, wgt_parent, lyt_parent):
+    def __init__(self, obj_name, wgt_parent, lyt_parent, report_cb):
+        self.obj_name = obj_name
         self.parent = wgt_parent
         self.parent_layout = lyt_parent
+        self.report_cb = report_cb
         
         self.vertical_layout = QtWidgets.QVBoxLayout()
         self.vertical_layout.setObjectName("vertical_layout_" + obj_name)
@@ -80,17 +106,34 @@ class SliderFeatureController():
         self.slr_h_feature = QtWidgets.QSlider(self.parent)
         self.slr_h_feature.setOrientation(QtCore.Qt.Horizontal)
         self.slr_h_feature.setObjectName(obj_name)
+        self.slr_h_feature.valueChanged.connect(self.ValueChanged)
         
         self.vertical_layout.addWidget(self.slr_h_feature)
         self.parent_layout.addLayout(self.vertical_layout)
     
-    def SetText(self, text, translate):
-        self.text = text
-        self.ftr_label.setText(translate("MainWindow", self.text))
+    def SetValue(self, curr_value):
+        self.value = curr_value
+        self.slr_h_feature.setValue(curr_value)
     
+    def SetText(self, text):
+        self.text = text
+        
+    def UpdateLabel(self, translate):
+        self.ftr_label.setText(translate("MainWindow", self.text))
+        
+    ''' valueChanged Qt Signal connected from QSlider '''
+    def ValueChanged(self, value):
+        self.value = value
+        self.report_cb(self.obj_name, self.value)
+        
 class Ui_MainWindow(object):
-    def setupUi(self, MainWindow):
+    def __init__(self, MainWindow, vpf_controller):
+        super(Ui_MainWindow, self).__init__()
         self.main_window = MainWindow
+        self.controller = vpf_controller
+                
+    def setupUi(self):
+        assert(self.main_window is not None)
         self.main_widget = QtWidgets.QWidget(self.main_window)
         
         self.main_window.setObjectName("MainWindow")
@@ -127,12 +170,12 @@ class Ui_MainWindow(object):
         #########################
         # Check Box Activity List
         self.lst_aCheckBox = list()
-        self.AddActivityCheckBox("checkbox0")
-        self.AddActivityCheckBox("checkbox1")
-        self.AddActivityCheckBox("checkbox2")
-        self.AddActivityCheckBox("checkbox3")
-        self.AddActivityCheckBox("checkbox4")
-        self.AddActivityCheckBox("checkbox5")
+        #self.AddActivityCheckBox("checkbox0")
+        #self.AddActivityCheckBox("checkbox1")
+        #self.AddActivityCheckBox("checkbox2")
+        #self.AddActivityCheckBox("checkbox3")
+        #self.AddActivityCheckBox("checkbox4")
+        #self.AddActivityCheckBox("checkbox5")
 
         # Add Checkbox ScrollArea into the LeftVLayout
         self.LeftVLayout.addWidget(self.checkbox_scrollarea, 0, QtCore.Qt.AlignTop)
@@ -172,15 +215,15 @@ class Ui_MainWindow(object):
         #########################
         # Create Feature Sliders
         self.lst_fSlider = list()
-        self.AddFeatureSlider("slider0")
-        self.AddFeatureSlider("slider1")
-        self.AddFeatureSlider("slider2")
-        self.AddFeatureSlider("slider3")
-        self.AddFeatureSlider("slider4")
-        self.AddFeatureSlider("slider5")             
-        self.AddFeatureSlider("slider6")
-        self.AddFeatureSlider("slider7")
-        self.AddFeatureSlider("slider8")        
+        #self.AddFeatureSlider("slider0")
+        #self.AddFeatureSlider("slider1")
+        #self.AddFeatureSlider("slider2")
+        #self.AddFeatureSlider("slider3")
+        #self.AddFeatureSlider("slider4")
+        #self.AddFeatureSlider("slider5")             
+        #self.AddFeatureSlider("slider6")
+        #self.AddFeatureSlider("slider7")
+        #self.AddFeatureSlider("slider8")        
         
         # Add the vertical widget layout for sliders
         self.scl_are_features.setWidget(self.lay_ver_features)
@@ -244,11 +287,11 @@ class Ui_MainWindow(object):
         
         # Update Check Box Activity Names
         for i in range(len(self.lst_aCheckBox)):
-            self.lst_aCheckBox[i].SetText("Check box " + str(i), _translate)
+            self.lst_aCheckBox[i].UpdateLabel(_translate)
         
         # Update Slider Feature Names        
         for i in range(len(self.lst_fSlider)):
-            self.lst_fSlider[i].SetText("TextLabel " + str(i), _translate)
+            self.lst_fSlider[i].UpdateLabel(_translate)
         
         self.menuFile.setTitle(_translate("MainWindow", "File"))
         
@@ -271,29 +314,35 @@ class Ui_MainWindow(object):
             pass
             
     """ Add a new Activity CheckBox """        
-    def AddActivityCheckBox(self, obj_name):
+    def AddActivityCheckBox(self, obj_name, text_label):
         assert(self.widget_cbx_hor_layout is not None and self.layout_hor_cbx is not None and self.lst_aCheckBox is not None)
         
         index_cbox = len(self.lst_aCheckBox)
         
-        self.lst_aCheckBox.append(ActivityCheckBox(obj_name, self.widget_cbx_hor_layout))
+        self.lst_aCheckBox.append(ActivityCheckBox(obj_name, self.widget_cbx_hor_layout, self.SetCheckBoxState))
         self.lst_aCheckBox[index_cbox].AddWidget(self.layout_hor_cbx)
+        self.lst_aCheckBox[index_cbox].SetText(text_label)
+        self.lst_aCheckBox[index_cbox].SetCheckState(QtCore.Qt.Checked)
         
-    def AddFeatureSlider(self, obj_name):
+    def AddFeatureSlider(self, obj_name, text_label, initial_value):
         assert(self.lay_ver_features is not None and self.verticalLayout is not None and self.lst_fSlider is not None)
                 
         index_cbox = len(self.lst_fSlider)
         
-        self.lst_fSlider.append(SliderFeatureController(obj_name, self.lay_ver_features, self.verticalLayout))
+        self.lst_fSlider.append(SliderFeatureController(obj_name, self.lay_ver_features, self.verticalLayout, self.SetSliderValue))
         #self.lst_fSlider[index_cbox].AddWidget(self.layout_hor_cbx)
+        self.lst_fSlider[index_cbox].SetText(text_label)
+        self.lst_fSlider[index_cbox].SetValue(initial_value)
         
-        
-if __name__ == "__main__":
-    import sys
-    app = QtWidgets.QApplication(sys.argv)
-    MainWindow = QtWidgets.QMainWindow()
-    ui = Ui_MainWindow()
-    ui.setupUi(MainWindow)
-    MainWindow.show()
-    sys.exit(app.exec_())
-
+    def SetCheckBoxState(self, obj_name, state):
+        if state == QtCore.Qt.Checked:
+            self.controller.SetActivityVisibility(obj_name, True)
+        else:
+            self.controller.SetActivityVisibility(obj_name, False)
+    
+    def SetSliderValue(self, obj_name, value):
+        self.controller.SetFeatureWeightValue(obj_name, value * 0.01)
+    
+    def Show(self):
+        assert(self.main_window is not None)
+        self.main_window.show()
