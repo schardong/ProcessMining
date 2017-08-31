@@ -28,6 +28,7 @@ class DataProvider(object):
              m[j] = casedata.CompositeDistance(self.casedata_v[initial], self.casedata_v[j],self.caseDataCoefs, jac, edition)
          return m
     
+
     def Calculate(self):
         print("calculando")
         pool = Pool(processes=8)
@@ -36,3 +37,6 @@ class DataProvider(object):
         pool.close() # ATTENTION HERE
         print(array_2D)
         return array_2D
+
+    def SaveExportedData(self,filename,indexes):
+        casedata.SaveData(filename,self.casedata_v,indexes)

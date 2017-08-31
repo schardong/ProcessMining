@@ -1,7 +1,6 @@
 import math
 import numpy as np
-import glob
-import fileinput
+import csv
 
 
 class CaseDataCoeficients(object):
@@ -65,6 +64,15 @@ def ReadData(cf):
             index = index + 1
 
     return casedata
+
+def SaveData(filename,cases,caseIndexes):
+    f = open(filename +'.csv', 'w')
+    line = 'CaseName,EndPointSituation,RequestAmount,CreditScore,Variant,NumberOfOffers,LoanGoal\n'
+    f.write(line)
+    for i in caseIndexes:
+        line = cases[i].casename + "," + str(cases[i].endsituation) + "," + str(cases[i].requestamount) + "," + str(cases[i].creditscore) + "," + str(cases[i].variant) + "," + str(cases[i].numberofoffers) + "," + str(cases[i].loangoal) + '\n'
+        f.write(line)
+    f.close()
 
 
 def UpdateMaxValues(number_of_cases, case_datas, cf):
