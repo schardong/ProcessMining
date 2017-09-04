@@ -16,6 +16,7 @@ class ActivityCheckBox():
         self.checkBox = QtWidgets.QCheckBox(self.parent)
         self.checkBox.setObjectName(ckb_name)
         self.checkBox.stateChanged.connect(self.StateChanged)       
+        self.checkBox.setStyleSheet("color: red")
         
     def AddWidget(self, layout_reference):
         self.refence = layout_reference
