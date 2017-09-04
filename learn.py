@@ -98,6 +98,7 @@ class chart(object):
             for i in self.selected:
                 self.coll._facecolors[i, :] = self.colors[int(self.endsit[i])]
             self.selected = []
+            self.clicked = False
             self.fig.canvas.draw()
 
     def buttonRelease(self, event):
