@@ -18,15 +18,11 @@ from uielements import ActivityCheckBox, SliderFeatureController
 from fcprojectionchart import ProjectionChart
 
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, vpf_controller):
+    def __init__ (self, vpf_controller):
         super(MainWindow, self).__init__()
         self.controller = vpf_controller
      
-    '''Keyboard callback'''
-    def keyPressEvent(self, ev):
-        print("MainWindow key press", ev.key)
-
-    def setupUi(self):
+    def setupUi (self):
         self.main_widget = QtWidgets.QWidget(self)
         
         self.setObjectName("MainWindow")
@@ -75,11 +71,11 @@ class MainWindow(QtWidgets.QMainWindow):
         
         #########################
         ## MatPlot Creation
-        self.graphicsView = ProjectionChart(self.main_widget, width=5, height=4, dpi=100)
-        self.graphicsView.setObjectName("graphicsView")
+        self.chart = ProjectionChart(self.main_widget, width=5, height=4, dpi=100)
+        self.chart.setObjectName("chart")
         
         # Add MatPlot into the LeftVLayout
-        self.LeftVLayout.addWidget(self.graphicsView)
+        self.LeftVLayout.addWidget(self.chart)
         
         #########################
         # Progress bar
@@ -125,12 +121,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.RightHLayout.addWidget(self.scl_are_features)
         
         # Create the Vertical Slider to control the number of cases
-        self.verticalSlider = QtWidgets.QSlider(self.CentralHLayout)
-        self.verticalSlider.setOrientation(QtCore.Qt.Vertical)
-        self.verticalSlider.setObjectName("verticalSlider")
+        self.sld_numberofcases = QtWidgets.QSlider(self.CentralHLayout)
+        self.sld_numberofcases.setOrientation(QtCore.Qt.Vertical)
+        self.sld_numberofcases.setObjectName("sld_numberofcases")
+        
+        # valueChanged()   Emitted when the slider's value has changed. The tracking() determines whether this signal is emitted during user interaction.
+        # sliderPressed() Emitted when the user starts to drag the slider.
+        # sliderMoved()   Emitted when the user drags the slider.
+        # Emitted when the user releases the slider.
+        self.sld_numberofcases.sliderReleased.connect(self.setNumberOfCases)
         
         # Add Vertical Slider into the right horizontal Layout
-        self.RightHLayout.addWidget(self.verticalSlider)
+        self.RightHLayout.addWidget(self.sld_numberofcases)
         
         
         # Add LeftVLayout to the Global Horizontal Layout
@@ -173,7 +175,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.retranslateUi()
         QtCore.QMetaObject.connectSlotsByName(self)
                     
-    def retranslateUi(self):
+    def retranslateUi (self):
         _translate = QtCore.QCoreApplication.translate
         
         self.setWindowTitle(_translate("MainWindow", "MainWindow"))
@@ -191,23 +193,33 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actionQuit.setText(_translate("MainWindow", "Quit"))
         self.actionRemove_Checkbox.setText(_translate("MainWindow", "Remove Checkbox"))
 
-    """ Remove CheckBox From MainWindow """
-    def removeCheckboxFromMain(self):
+    # Remove CheckBox From MainWindow
+    def removeCheckboxFromMain (self):
         if len(self.lst_aCheckBox) > 0:
             self.lst_aCheckBox[0].RemoveWidget()
             self.lst_aCheckBox[0] = None
             self.lst_aCheckBox.remove(self.lst_aCheckBox[0])
         
-    """ Quit Application """
-    def QuitApplication(self):
+    # Quit Application
+    def QuitApplication (self):
         ret_mbox = QtWidgets.QMessageBox.question(self, "Quit","Are you sure?", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No) 
         if ret_mbox == QtWidgets.QMessageBox.Yes:
             sys.exit()
         else:
             pass
-            
-    """ Add a new Activity CheckBox """        
-    def AddActivityCheckBox(self, obj_name, text_label):
+
+    def GetProjectionChart (self):
+        assert(self.chart is not None)
+        return self.chart
+    
+    def Show (self):
+        self.show()
+    
+    #-----------------------------------------------
+    # Activities visibility checkbox functions    
+    #-----------------------------------------------
+    # Add a new Activity CheckBox
+    def AddActivityCheckBox (self, obj_name, text_label):
         assert(self.widget_cbx_hor_layout is not None and self.layout_hor_cbx is not None and self.lst_aCheckBox is not None)
         
         index_cbox = len(self.lst_aCheckBox)
@@ -216,8 +228,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.lst_aCheckBox[index_cbox].AddWidget(self.layout_hor_cbx)
         self.lst_aCheckBox[index_cbox].SetText(text_label)
         self.lst_aCheckBox[index_cbox].SetCheckState(QtCore.Qt.Checked)
-        
-    def AddFeatureSlider(self, obj_name, text_label, initial_value):
+    
+    def SetCheckBoxState (self, obj_name, state):
+        if state == QtCore.Qt.Checked:
+            self.controller.SetActivityVisibility(obj_name, True)
+        else:
+            self.controller.SetActivityVisibility(obj_name, False)
+
+    #-----------------------------------------------
+    # Feature weight slider functions    
+    #-----------------------------------------------
+    def AddFeatureSlider (self, obj_name, text_label, initial_value):
         assert(self.lay_ver_features is not None and self.verticalLayout is not None and self.lst_fSlider is not None)
                 
         index_cbox = len(self.lst_fSlider)
@@ -226,15 +247,34 @@ class MainWindow(QtWidgets.QMainWindow):
         #self.lst_fSlider[index_cbox].AddWidget(self.layout_hor_cbx)
         self.lst_fSlider[index_cbox].SetText(text_label)
         self.lst_fSlider[index_cbox].SetValue(initial_value)
+    
+    def SetSliderValue (self, obj_name, value):
+        #print("SetSliderValue", obj_name, value)
+        self.controller.SetFeatureWeightValue(obj_name, value)
         
-    def SetCheckBoxState(self, obj_name, state):
-        if state == QtCore.Qt.Checked:
-            self.controller.SetActivityVisibility(obj_name, True)
-        else:
-            self.controller.SetActivityVisibility(obj_name, False)
+    #----------------------------------
+    # number of cases slider functions    
+    #----------------------------------
+    # set the current range of the slider
+    def setMaxNumberOfCases (self, n_max_cases):
+        assert(self.sld_numberofcases is not None)
+        self.sld_numberofcases.setRange(0, n_max_cases)
     
-    def SetSliderValue(self, obj_name, value):
-        self.controller.SetFeatureWeightValue(obj_name, value * 0.01)
-    
-    def Show(self):
-        self.show()
+    # set the current number of cases, but did not call the update from controller
+    def setCurrentNumberOfCases (self, n_cases):
+        assert(self.sld_numberofcases is not None)
+        self.sld_numberofcases.setValue(n_cases)
+        #self.controller.updateNumberOfCases(n_cases)
+        
+    ## SIGNAL
+    # signal received from the 'sliderReleased' callback
+    def setNumberOfCases (self):
+        #print("Set Number Of Cases Called!", self.sld_numberofcases.value())
+        self.controller.updateNumberOfCases(self.sld_numberofcases.value())
+
+    #---------------
+    # input callbacks
+    #---------------
+    # Keyboard callback
+    def keyPressEvent (self, ev):
+        print("MainWindow key press", ev.key)
