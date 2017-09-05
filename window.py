@@ -7,140 +7,33 @@
 # WARNING! All changes made in this file will be lost!
 
 import sys
-import random
 import matplotlib
 matplotlib.use("Qt5Agg")
 
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QApplication, QMainWindow, QMenu, QVBoxLayout, QSizePolicy, QMessageBox, QWidget
-from numpy import arange, sin, pi
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+from PyQt5 import QtCore, QtWidgets
+from PyQt5.QtWidgets import QMainWindow, QMenu, QVBoxLayout, QMessageBox, QWidget
 
 from uielements import ActivityCheckBox, SliderFeatureController
-import dataprovider
-import learn
-import copy
-import numpy as np
-import sys
 
-class ProjectionChart(FigureCanvas):
-    """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""
-    def __init__(self, parent=None, width=5, height=4, dpi=100):
-        print("INIT")
-        fig = Figure(figsize=(width, height), dpi=dpi)
-        self.axes = fig.add_subplot(111)
-        # We want the axes cleared every time plot() is called
+from fcprojectionchart import ProjectionChart
 
-        FigureCanvas.__init__(self, fig)
-        self.setParent(parent)
-        
-        FigureCanvas.setSizePolicy(self,QSizePolicy.Expanding,QSizePolicy.Expanding)
-        FigureCanvas.updateGeometry(self)
-        
-        # TODO TESTE
-        weights = [1.0,0.5,0.0,0.5,1.0,0.0]
-        size = 10
-        data = dataprovider.DataProvider(size, weights)
-        self.endsit = data.GetEndSituation()
-        dots = data.Calculate()
-        mds = learn.mdsClass()
-        self.pos = mds.mdsGen(dots)
-
-        self.save = data.SaveExportedData
-        self.clicked = False
-        self.selected = []
-        
-        # Set Callbacks
-        self.mpl_connect('pick_event', self.pickEvent)
-        self.mpl_connect('motion_notify_event', self.onHover)
-        self.mpl_connect('button_release_event', self.buttonRelease)
-        self.mpl_connect('key_press_event', self.keyPressed)
-        self.mpl_connect('motion_notify_event', self.motionMouse)
-        
-        self.firstdraw()
- 
-    def distance(self, point, event):
-        assert point.shape == (2,), "distance: point.shape is wrong: %s, must be (3,)" % point.shape
-        # Convert 2d data space to 2d screen space
-        x3, y3 = self.axes.transData.transform((point[0], point[1]))
-        return np.sqrt((x3 - event.x) ** 2 + (y3 - event.y) ** 2)
-
-    def calcClosestDatapoint(self, event):
-        """"Calculate which data point is closest to the mouse position.
-        Args:
-            X (np.array) - array of points, of shape (numPoints, 3)
-            event (MouseEvent) - mouse event (containing mouse position)
-        Returns:
-            smallestIndex (int) - the index (into the array of points X) of the element closest to the mouse position
-        """
-        distances = np.array([self.distance(self.pos[i, 0:2], event) for i in range(self.pos.shape[0])])
-        brushlist = np.where(np.logical_and(distances >= 0, distances <= 10))
-        return brushlist[0]
-        
-    def motionMouse(self, event):
-        print("motion", event.xdata, event.ydata)
-    
-    def keyPressed(self, event):
-        print("keyPressed", event.key)
-        sys.stdout.flush()
-        if event.key == 's':
-            self.save("Exported Files", self.selected)
-        
-    def buttonRelease(self, event):
-        #print("buttonRelease")
-        if event.button == 1:
-            self.clicked = False
-        
-    def pickEvent(self, event):
-        #print("pickEvent")
-        self.coll._facecolors[event.ind, :] = (1, 0.54, 0, 1)
-        self.draw()
-        self.clicked = True
-
-    def onHover(self, event):
-        #print("onHover")
-        if self.clicked == True:
-            d = self.calcClosestDatapoint(event)
-            self.selected.extend(d)
-            self.selected = list(set(self.selected))
-            for i in range(self.selected.__len__()):
-                self.coll._facecolors[self.selected[i], :] = (1, 0.54, 0, 1)
-            self.draw()
-        
-    def firstdraw(self):
-        ''' plot some random stuff '''
-        data = [random.random() for i in range(25)]
-        self.axes.clear()
-        self.coll = self.axes.scatter(self.pos[:, 0], self.pos[:, 1], c=self.endsit, cmap='brg', picker=5, alpha=0.7,
-                                      edgecolors='none')
-        
-        green_patch = mpatches.Patch(color='blue', label='Aproved')
-        red_patch = mpatches.Patch(color='red', label='Denied')
-        blue_patch = mpatches.Patch(color='lawngreen', label='Canceled')
-        self.axes.legend(handles=[green_patch, red_patch, blue_patch])
-        
-        #self.axes.plot(data, '*-')
-        #self.graphicsView.draw()
-        self.draw()
-        
-class Ui_MainWindow(object):
-    def __init__(self, MainWindow, vpf_controller):
-        super(Ui_MainWindow, self).__init__()
-        self.main_window = MainWindow
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(self, vpf_controller):
+        super(MainWindow, self).__init__()
         self.controller = vpf_controller
-                
+     
+    '''Keyboard callback'''
+    def keyPressEvent(self, ev):
+        print("MainWindow key press", ev.key)
+
     def setupUi(self):
-        assert(self.main_window is not None)
-        self.main_widget = QtWidgets.QWidget(self.main_window)
+        self.main_widget = QtWidgets.QWidget(self)
         
-        self.main_window.setObjectName("MainWindow")
-        self.main_window.resize(978, 667)
+        self.setObjectName("MainWindow")
+        self.resize(978, 667)
         
         # Global Horizontal Layout (All window)
-        self.CentralHLayout = QtWidgets.QWidget(self.main_window)
+        self.CentralHLayout = QtWidgets.QWidget(self)
         self.CentralHLayout.setObjectName("CentralHLayout")
         self.horizontalLayout = QtWidgets.QHBoxLayout(self.CentralHLayout)
         self.horizontalLayout.setObjectName("horizontalLayout")
@@ -246,27 +139,27 @@ class Ui_MainWindow(object):
         self.horizontalLayout.addLayout(self.RightHLayout)
         
         # Add Central Horizontal Layout into the MainWindow
-        self.main_window.setCentralWidget(self.CentralHLayout)
+        self.setCentralWidget(self.CentralHLayout)
         
         # Menu Bar Creation
-        self.menubar = QtWidgets.QMenuBar(self.main_window)
+        self.menubar = QtWidgets.QMenuBar(self)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 978, 21))
         self.menubar.setObjectName("menubar")
         
         self.menuFile = QtWidgets.QMenu(self.menubar)
         self.menuFile.setObjectName("menuFile")
         
-        self.main_window.setMenuBar(self.menubar)
-        self.statusbar = QtWidgets.QStatusBar(self.main_window)
+        self.setMenuBar(self.menubar)
+        self.statusbar = QtWidgets.QStatusBar(self)
         self.statusbar.setObjectName("statusbar")
-        self.main_window.setStatusBar(self.statusbar)
+        self.setStatusBar(self.statusbar)
         
         # Action attached to "Quit" menu item
-        self.actionQuit = QtWidgets.QAction(self.main_window)
+        self.actionQuit = QtWidgets.QAction(self)
         self.actionQuit.setObjectName("actionQuit")
         self.actionQuit.triggered.connect(self.QuitApplication)
         
-        self.actionRemove_Checkbox = QtWidgets.QAction(self.main_window)
+        self.actionRemove_Checkbox = QtWidgets.QAction(self)
         self.actionRemove_Checkbox.setObjectName("actionRemove_Checkbox")
         self.actionRemove_Checkbox.triggered.connect(self.removeCheckboxFromMain)
 
@@ -278,12 +171,12 @@ class Ui_MainWindow(object):
         self.menubar.addAction(self.menuFile.menuAction())
 
         self.retranslateUi()
-        QtCore.QMetaObject.connectSlotsByName(self.main_window)
+        QtCore.QMetaObject.connectSlotsByName(self)
                     
     def retranslateUi(self):
         _translate = QtCore.QCoreApplication.translate
         
-        self.main_window.setWindowTitle(_translate("MainWindow", "MainWindow"))
+        self.setWindowTitle(_translate("MainWindow", "MainWindow"))
         
         # Update Check Box Activity Names
         for i in range(len(self.lst_aCheckBox)):
@@ -307,7 +200,7 @@ class Ui_MainWindow(object):
         
     """ Quit Application """
     def QuitApplication(self):
-        ret_mbox = QtWidgets.QMessageBox.question(self.main_window, "Quit","Are you sure?", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No) 
+        ret_mbox = QtWidgets.QMessageBox.question(self, "Quit","Are you sure?", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No) 
         if ret_mbox == QtWidgets.QMessageBox.Yes:
             sys.exit()
         else:
@@ -344,18 +237,4 @@ class Ui_MainWindow(object):
         self.controller.SetFeatureWeightValue(obj_name, value * 0.01)
     
     def Show(self):
-        assert(self.main_window is not None)
-        self.main_window.show()
-        
-class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, controller):
-        super(MainWindow, self).__init__()
-        self.ui = Ui_MainWindow(self, controller)
-        self.ui.setupUi()
-                    
-    def GetUI(self):
-        return self.ui
-        
-    def keyPressEvent(self, ev):
-        #print("key press")
-        self.k = ev.key
+        self.show()

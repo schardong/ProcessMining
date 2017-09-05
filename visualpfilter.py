@@ -1,17 +1,13 @@
 import sys
 import window
 
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QApplication, QMainWindow, QMenu, QVBoxLayout, QSizePolicy, QMessageBox, QWidget
-from numpy import arange, sin, pi
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
+from PyQt5 import QtWidgets
 
 class VisualProcessFilter(object):
     def __init__(self, s_argv):
         self.app = QtWidgets.QApplication(sys.argv)
         self.mainwindow = window.MainWindow(self)
-        self.ui = self.mainwindow.GetUI()
+        self.mainwindow.setupUi()
         
     def Init(self):
         weights = [1.0,50,0.0,0.5,1.0,0.0]
@@ -23,11 +19,11 @@ class VisualProcessFilter(object):
         # TODO: Custom Name
         assert(len(weights) == len(weights_name))
         for i in range(len(weights)):
-            self.ui.AddFeatureSlider(weights_name[i], weights_name[i], weights[i])
+            self.mainwindow.AddFeatureSlider(weights_name[i], weights_name[i], weights[i])
             
         for i in range(len(activities)):
-            self.ui.AddActivityCheckBox(activities[i], activities[i])
-        self.ui.retranslateUi()
+            self.mainwindow.AddActivityCheckBox(activities[i], activities[i])
+        self.mainwindow.retranslateUi()
     
         #data = dataprovider.DataProvider(size, weights)
         #endsit = data.GetEndSituation()
@@ -41,7 +37,7 @@ class VisualProcessFilter(object):
     
     
     def Start(self):
-        self.ui.Show()
+        self.mainwindow.Show()
         sys.exit(self.app.exec_())
     
 if __name__ == "__main__":
