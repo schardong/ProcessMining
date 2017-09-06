@@ -38,12 +38,12 @@ class ActivityCheckBox():
         self.state = state
         self.checkBox.setCheckState(state)
         
-    ''' stateChanged Qt Signal connected from QCheckBox
-        CheckState:
-            Qt.Unchecked        0
-            Qt.PartiallyChecked	1
-            Qt.Checked          2
-    '''
+    # stateChanged Qt Signal connected from QCheckBox
+    # CheckState:
+    #     Qt.Unchecked        0
+    #     Qt.PartiallyChecked	1
+    #     Qt.Checked          2
+    #
     def StateChanged(self, state):
         assert(state == QtCore.Qt.Checked or state == QtCore.Qt.Unchecked)
         self.state = state
@@ -76,13 +76,14 @@ class SliderFeatureController():
         self.slr_h_feature.setOrientation(QtCore.Qt.Horizontal)
         self.slr_h_feature.setObjectName(obj_name)
         self.slr_h_feature.valueChanged.connect(self.ValueChanged)
+        self.slr_h_feature.setRange(0, 100)
         
         self.vertical_layout.addWidget(self.slr_h_feature)
         self.parent_layout.addLayout(self.vertical_layout)
     
     def SetValue(self, curr_value):
-        self.value = curr_value
-        self.slr_h_feature.setValue(curr_value)
+        self.value = curr_value * 100
+        self.slr_h_feature.setValue(self.value)
     
     def SetText(self, text):
         self.text = text
@@ -90,7 +91,7 @@ class SliderFeatureController():
     def UpdateLabel(self, translate):
         self.ftr_label.setText(translate("MainWindow", self.text))
         
-    ''' valueChanged Qt Signal connected from QSlider '''
+    # valueChanged Qt Signal connected from QSlider
     def ValueChanged(self, value):
         self.value = value
-        self.report_cb(self.obj_name, self.value)
+        self.report_cb(self.obj_name, self.value * 0.01)
