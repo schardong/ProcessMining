@@ -24,7 +24,7 @@ if __name__ == '__main__':
 
     weights = [1.0,0.5,0.0,0.5,1.0,0.0]
     #sample size
-    size = 100
+    size = 10000
 
 
     #params = size of sample set and list of weight

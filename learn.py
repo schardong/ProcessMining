@@ -85,6 +85,7 @@ class chart(object):
             print("saving")
             self.save(self.title, self.selected)
         if event.key == 'z':
+            self.clicked = False
             self.selected = []
             self.chull = []
             for i in range(self.pos.shape[0]):
@@ -100,7 +101,7 @@ class chart(object):
 
     def buttonClick(self, event):
 
-        if event.button == 1:
+        if event.button == 1 and self.clicked==False:
             print('button=%d, x=%d, y=%d, xdata=%f, ydata=%f' %
                   (event.button, event.x, event.y, event.xdata, event.ydata))
 
@@ -111,7 +112,8 @@ class chart(object):
             self.selpoints.append(point)
             self.selline.append(line)
 
-        elif event.button == 3:
+        elif event.button == 3 and len(self.chull)>0:
+            self.clicked = True
             hull = ConvexHull(np.array(self.chull))
             inds = hull.vertices
             p = np.array(self.chull)
