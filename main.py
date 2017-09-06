@@ -22,7 +22,7 @@ if __name__ == '__main__':
     #click botão direito para limpar
     weights = [1.0,0.5,0.0,0.5,1.0,0.0]
     #sample size
-    size = 200
+    size = 100
 
 
     #params = size of sample set and list of weight
