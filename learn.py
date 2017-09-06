@@ -106,8 +106,8 @@ class chart(object):
 
             self.chull.append([event.xdata, event.ydata])
             p = np.array(self.chull)
-            point, = plt.plot(event.xdata, event.ydata, 'o', picker=5, markersize=4, c="orange")
-            line,  = plt.plot(p[:,0], p[:,1], 'r--', c="orange", lw=2)
+            point, = plt.plot(event.xdata, event.ydata, 'o', picker=5, markersize=4, c="gray")
+            line,  = plt.plot(p[:,0], p[:,1], 'r--', c="gray", lw=2)
             self.selpoints.append(point)
             self.selline.append(line)
 
@@ -120,7 +120,7 @@ class chart(object):
                 if hull_path.contains_point(self.pos[k]):
                     self.selected.append(k)
                 else:
-                    self.coll._facecolors[k, :] = (1, 0.54, 0, 0.2)
+                    self.coll._facecolors[k, :] = (0.75, 0.75, 0.75, 0.5)
             self.chull = []
         self.fig.canvas.draw()
 
