@@ -200,11 +200,6 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         if 's' not in self._plot_params:
             self._plot_params['s'] = 40
 
-        # Convex hull attributes.
-        self._chull = []  # Convex hull in data coordinates
-        # Convex hull artists
-        self._chull_points_art = []
-        self._chull_lines_art = []
         self._chulls = []
 
         # Callback IDs
