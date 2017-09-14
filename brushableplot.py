@@ -123,7 +123,7 @@ class BrushableCanvas:
             else:
                 self._highlighted_data.update(data_idx)
         if update_chart:
-            self.update_chart(selected_data=True)
+            self.update_chart(selection_changed=True)
 
     def update_chart(self, **kwargs):
         '''

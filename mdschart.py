@@ -1,16 +1,92 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+from copy import deepcopy
 import numpy as np
 from matplotlib import cm
 from matplotlib.backends.backend_qt5agg import \
     FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from PyQt5.QtCore import QObject, QPoint, pyqtSignal
+from matplotlib.path import Path
+from PyQt5.QtCore import QPoint, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QPalette
 from PyQt5.QtWidgets import QSizePolicy, QToolTip
+from scipy.spatial import ConvexHull
 
 from brushableplot import BrushableCanvas
+
+
+class PolygonSelection(object):
+    """
+    This class contains data about a group selection in the ScatterChart. All
+    artists created by matplotlib (points and lines), as well as the points
+    that compose the selection hull and the data points inside the hull are
+    stored here."
+    """
+
+    def __init__(self, axes):
+        self._axes = axes
+        self._hull_points_art = []
+        self._hull_lines_art = []
+        self._hull_coords = []
+
+    @property
+    def axes(self):
+        return self._axes
+
+    @property
+    def hull_coords(self):
+        return self._hull_coords
+
+    def add_hull_point(self, coords):
+        """
+        Adds a new point to the hull. This new point is appended to a list of
+        hull points.
+
+        Parameters
+        ----------
+        coords : list
+            A list with the X and Y data coordinates of the new point.
+        """
+
+        self.axes.draw()
+
+    def move_hull_point(self, pidx, new_coords):
+        """
+        Moves a hull point to new coordinates. Raises ValueError exception if
+        the index is out of range.
+
+        Parameters
+        ----------
+        pidx: int
+            The index of the point to be removed.
+        """
+        if pidx < 0 or pidx > len(self.hull_coords):
+            raise ValueError(
+                'Index out of range (0, {})'.format(len(self.hull_coords)))
+        self.axes.draw()
+
+    def del_hull_point(self, pidx):
+        """
+        Removes a point from the hull. Raises ValueError exception if the
+        index is out of range.
+
+        Parameters
+        ----------
+        pidx: int
+            The index of the point to be removed.
+        """
+        if pidx < 0 or pidx > len(self.hull_coords):
+            raise ValueError(
+                'Index out of range (0, {})'.format(len(self.hull_coords)))
+        self.axes.draw()
+
+    def finish_hull(self):
+        """
+        Method to close the hull and calculate the set of data points inside
+        it. Returns a list of indices of points inside the hull.
+        """
+        pass
 
 
 class ScatterChart(FigureCanvas, BrushableCanvas):
@@ -18,6 +94,8 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
     This class builds a scatter chart of the given data points. It also handles
     data selection (brushing and linking) and tooltips.
     """
+
+    MOUSE_BUTTONS = {'LEFT': 1, 'MID': 2, 'RIGHT': 3}
 
     def __init__(self, canvas_name, parent, width=5, height=5, dpi=100,
                  **kwargs):
@@ -53,8 +131,8 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
 
         # Data and plot style setup
         self._data = None
-        self._pointnames = None
         self._tooltip_enabled = True
+        self._region_selection_enabled = False
         self._cmap_name = 'rainbow'
         self._plot_title = self.base_plot_name()
         self._xaxis_label = 'Axis 1'
@@ -62,15 +140,25 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         self._point_names = None
         self._point_artists = None
         self._points_colors = {}
+        self._selection_finished = False
+
+        # Point plot parameters. Adding missing parameters if needed.
         self._plot_params = kwargs
         if 'picker' not in self._plot_params:
-            self._plot_params['picker'] = 3
+            self._plot_params['picker'] = 3.0
         if 's' not in self._plot_params:
             self._plot_params['s'] = 40
 
+        # Convex hull attributes.
+        self._chull = []  # Convex hull in data coordinates
+        # Convex hull artists
+        self._chull_points_art = []
+        self._chull_lines_art = []
+
         # Callback IDs
         self._cb_mouse_move_id = None
-        self._cb_mouse_button_id = None
+        self._cb_mouse_press_id = None
+        self._cb_pick_id = None
         self._cb_scrollwheel_id = None
         self._cb_axes_leave_id = None
         self._cb_fig_leave_id = None
@@ -163,6 +251,13 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         Returns wheter the tooltip is enabled or not.
         """
         return self._tooltip_enabled
+
+    @property
+    def region_selection_enabled(self):
+        """
+        Returns wheter the region selection option is activated.
+        """
+        return self._region_selection_enabled
 
     def set_data(self, data, update_chart=True):
         """
@@ -271,7 +366,7 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         if update_chart:
             self.update_chart(data_changed=True)
 
-    def set_tooltip_enabled(self, enable):
+    def set_tooltip_state(self, enable):
         """
         Sets wheter the tooltip will be shown when the mouse hovers a data
         point.
@@ -282,6 +377,30 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
             True to enable, False to disable.
         """
         self._tooltip_enabled = enable
+
+    def set_region_selection_state(self, state):
+        """
+        Sets wheter the region selection option is activated (True) or not
+        (False). Region selection is done by drawing a polygon around the
+        points of interest, all points within that polygon are considered
+        selected once the selection is confirmed by the user.
+        """
+        self._region_selection_enabled = state
+        fig = self.figure
+        if state:
+            if self._cb_pick_id:
+                fig.canvas.mpl_disconnect(self._cb_pick_id)
+                self._cb_pick_id = None
+
+            self._cb_mouse_press_id = fig.canvas.mpl_connect(
+                'button_press_event', self.cb_mouse_press_event)
+        else:
+            if self._cb_mouse_press_id:
+                fig.canvas.mpl_disconnect(self._cb_mouse_press_id)
+                self._cb_mouse_press_id = None
+
+            self._cb_pick_id = fig.canvas.mpl_connect(
+                'pick_event', self.cb_pick_event)
 
     def update_chart(self, **kwargs):
         """
@@ -296,11 +415,16 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         """
         if ('selection_changed' in kwargs and
                 kwargs['selection_changed'] is True):
-            bg_alpha = 0.3
+            # First, if there is selected data, we make the background points
+            # more transparent. If there is not, we restore their full
+            # opacity.
+            bg_alpha = 0.15
             if not self.highlighted_data:
                 bg_alpha = 1.0
             for col in self.axes.collections:
                 col.set_alpha(bg_alpha)
+
+            # Then, we highlight the selected data with a higher opacity.
             for i in self.highlighted_data:
                 self.axes.collections[i].set_alpha(1.0)
 
@@ -316,30 +440,24 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
             self._points_colors = dict((i, colormap(i))
                                        for i in range(len(self.data)))
 
-            plot_params = self._plot_params
+            plot_params = deepcopy(self._plot_params)
             for i, p in enumerate(self.data):
                 plot_params['c'] = self._points_colors[i]
                 self._point_artists[i] = self.axes.scatter(
                     x=p[0], y=p[1], **plot_params)
+            plot_params = None
 
             self.update_chart(selection_changed=True)
 
         self.draw()
 
-    def cb_mouse_motion(self, event):
+    def cb_mouse_motion_event(self, event):
         """
         Callback to process a mouse movement event.
 
-        If the group selection option is enabled, then any points with
-        Y-coordinate less than the cursor's Y-coordinate will be marked in a
-        different opacity level, but not highlighted. If the user clicks with
-        the mouse, then the points will be highlighted, but this event is
-        processed in another method.
-
-        This method also processes tooltip-related events when the group
-        selection is disabled. If the user hovers the mouse cursor over a data
-        point, then the name associated to that point will be shown in a
-        tooltip.
+        This method checks if the mouse cursor is over a data point and, if
+        True, then it plots a tooltip (if enabled) and emits a tooltip_drawn
+        signal.
 
         Parameters
         ----------
@@ -388,10 +506,86 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
             else:
                 QToolTip.hideText()
 
-    def cb_mouse_button(self, event):
-        pass
+        self.draw()
 
-    def cb_mouse_scroll(self, event):
+    def cb_mouse_press_event(self, event):
+        # First, check if the event was not over a convex hull point.
+        if event.button == ScatterChart.MOUSE_BUTTONS['LEFT']:
+            if self._selection_finished:
+                self._chull = []
+                self._chull_points_art = []
+                self._chull_lines_art = []
+                self._selection_finished = False
+            # Add point to convex hull here.
+            self._chull.append([event.xdata, event.ydata])
+
+            # Plotting the points/lines.
+            params_p = deepcopy(self._plot_params)
+            params_p['marker'] = '+'
+            params_p['c'] = 'gray'
+            chull_art_p = self.axes.scatter(
+                event.xdata, event.ydata, **params_p)
+            self._chull_points_art.append(chull_art_p)
+            params_p = None
+
+            if len(self._chull) > 1:
+                xcoord = [self._chull[-2][0], self._chull[-1][0]]
+                ycoord = [self._chull[-2][1], self._chull[-1][1]]
+
+                chull_art_l = self.axes.plot(
+                    xcoord, ycoord, ls='dashed', c='gray', lw=2)
+                self._chull_points_art.append(chull_art_l)
+
+        elif event.button == ScatterChart.MOUSE_BUTTONS['RIGHT']:
+            self._selection_finished = True
+            # Plotting the last line of the hull.
+            xcoord = [self._chull[-1][0], self._chull[0][0]]
+            ycoord = [self._chull[-1][1], self._chull[0][1]]
+            chull_art_l = self.axes.plot(
+                xcoord, ycoord, ls='dashed', c='gray', lw=2)
+            self._chull_points_art.append(chull_art_l)
+
+            # Calculating the point's convex hull and confirming the selection.
+            pts = np.array(self._chull)
+            hull = ConvexHull(pts)
+            idx = hull.vertices
+            hull_path = Path(pts[idx])
+            to_erase = []
+            to_highlight = []
+            for i in range(self.data.shape[0]):
+                if hull_path.contains_point(self.data[i, :]):
+                    to_highlight.append(i)
+                else:
+                    to_erase.append(i)
+
+            self.highlight_data(to_erase, erase=True, update_chart=False)
+            self.highlight_data(to_highlight, erase=False, update_chart=True)
+
+        self.draw()
+
+    def cb_pick_event(self, event):
+        """
+        This method processes a picking event. The highlighted point is marked
+        and a notification is sent to the parent widget.
+        """
+        to_erase = []
+        to_highlight = []
+        for i, art in enumerate(self._point_artists):
+            contains, _ = art.contains(event.mouseevent)
+            if contains:
+                if i in self.highlighted_data:
+                    to_erase.append(i)
+                else:
+                    to_highlight.append(i)
+        self.highlight_data(to_erase, erase=True, update_chart=False)
+        self.highlight_data(to_highlight, erase=False, update_chart=True)
+        self.notify_parent()
+        self.draw()
+
+    def cb_mouse_scroll_event(self, event):
+        """
+        This method processes scroll wheel events. (zoom)
+        """
         pass
 
     # ------------------------------------------------------------------------
@@ -402,12 +596,17 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         Connects the callbacks to the matplotlib canvas.
         """
         fig = self.figure
+        if self.region_selection_enabled:
+            self._cb_pick_id = fig.canvas.mpl_connect(
+                'pick_event', self.cb_pick_event)
+        else:
+            self._cb_mouse_press_id = fig.canvas.mpl_connect(
+                'button_press_event', self.cb_mouse_press_event)
+
         self._cb_mouse_move_id = fig.canvas.mpl_connect(
-            'motion_notify_event', self.cb_mouse_motion)
-        self._cb_mouse_button_id = fig.canvas.mpl_connect(
-            'button_press_event', self.cb_mouse_button)
+            'motion_notify_event', self.cb_mouse_motion_event)
         self._cb_scrollwheel_id = fig.canvas.mpl_connect(
-            'scroll_event', self.cb_mouse_scroll)
+            'scroll_event', self.cb_mouse_scroll_event)
         # self._cb_axes_leave_id = fig.canvas.mpl_connect(
         #    'axes_leave_event', self.cb_axes_leave)
         # self._cb_fig_leave_id = fig.canvas.mpl_connect(
@@ -421,9 +620,9 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         if self._cb_mouse_move_id:
             fig.canvas.mpl_disconnect(self._cb_mouse_move_id)
             self._cb_mouse_move_id = None
-        if self._cb_mouse_button_id:
-            fig.canvas.mpl_disconnect(self._cb_mouse_button_id)
-            self._cb_mouse_button_id = None
+        if self._cb_mouse_press_id:
+            fig.canvas.mpl_disconnect(self._cb_mouse_press_id)
+            self._cb_mouse_press_id = None
         if self._cb_scrollwheel_id:
             fig.canvas.mpl_disconnect(self._cb_scrollwheel_id)
             self._cb_scrollwheel_id = None
@@ -507,13 +706,19 @@ def main():
             self.chart.set_colormap(self.COLORMAPS[cm_name])
 
         def set_tooltip_enabled(self, enable):
-            state = False
-            if enable == Qt.Checked:
-                state = True
-            self.chart.set_tooltip_enabled(state)
+            state = (enable == Qt.Checked)
+            self.chart.set_tooltip_state(state)
+
+        def set_region_selection_state(self, enable):
+            state = (enable == Qt.Checked)
+            self.chart.set_region_selection_state(state)
 
         def cb_tooltip(self, name, idx):
             print("Plot {} hovered the mouse over point {}".format(name, idx))
+
+        def set_brushed_data(self, child_name, obj_ids):
+            print('widget {} brushed some objects.'.format(child_name))
+            print('Objects:\n\t', obj_ids)
 
         def update_data(self):
             self.points = np.random.normal(size=(self.num_points, 2))
@@ -537,6 +742,10 @@ def main():
             enable_tooltip = QCheckBox('Tooltip enabled', self)
             enable_tooltip.setChecked(self.chart.tooltip_enabled)
             enable_tooltip.stateChanged.connect(self.set_tooltip_enabled)
+            enable_region_sel = QCheckBox('Region selection', self)
+            enable_region_sel.setChecked(self.chart.region_selection_enabled)
+            enable_region_sel.stateChanged.connect(
+                self.set_region_selection_state)
             colormap = QComboBox(self)
             for k in self.COLORMAPS_ORDER:
                 colormap.addItem(k)
@@ -563,6 +772,7 @@ def main():
             panel_layout = QVBoxLayout(self.main_widget)
             panel_layout.addLayout(form_layout)
             panel_layout.addWidget(enable_tooltip)
+            panel_layout.addWidget(enable_region_sel)
             panel_layout.addWidget(rand_data)
 
             l.addWidget(self.chart)
