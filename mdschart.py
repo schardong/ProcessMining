@@ -6,11 +6,12 @@ from matplotlib import cm
 from matplotlib.backends.backend_qt5agg import \
     FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from PyQt5.QtCore import QPoint
+from PyQt5.QtCore import QObject, QPoint, pyqtSignal
+from PyQt5.QtGui import QColor, QFont, QPalette
 from PyQt5.QtWidgets import QSizePolicy, QToolTip
-from PyQt5.QtGui import QFont, QPalette, QColor
 
 from brushableplot import BrushableCanvas
+
 
 class ScatterChart(FigureCanvas, BrushableCanvas):
     """
@@ -18,7 +19,8 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
     data selection (brushing and linking) and tooltips.
     """
 
-    def __init__(self, canvas_name, parent, width=5, height=5, dpi=100, **kwargs):
+    def __init__(self, canvas_name, parent, width=5, height=5, dpi=100,
+                 **kwargs):
         """
         Default constructor.
 
@@ -75,6 +77,14 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
 
         self._connect_cb()
 
+    # -------------------------------------------------------------------------
+    # Signals
+    # -------------------------------------------------------------------------
+    tooltip_drawn = pyqtSignal(str, int)
+
+    # -------------------------------------------------------------------------
+    # Public methods
+    # -------------------------------------------------------------------------
     @classmethod
     def base_plot_name(self):
         """
@@ -98,7 +108,7 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
     def data(self):
         """
         Returns the points given to this instance.
-        
+
         Returns
         -------
         out: numpy.array
@@ -123,10 +133,16 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
 
     @property
     def xaxis_label(self):
+        """
+        Returns the X axis label for this plot.
+        """
         return self._xaxis_label
 
     @property
     def yaxis_label(self):
+        """
+        Returns the Y axis label for this plot.
+        """
         return self._yaxis_label
 
     @property
@@ -164,12 +180,14 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         if not len(data):
             raise AttributeError('Invalid data provided (Empty or None).')
         if data.shape[1] != 2:
-            raise ValueError('Data is not bidimensional, this is a 2D plot only.')
+            raise ValueError(
+                'Data is not bidimensional, this is a 2D plot only.')
 
         self._data = data
 
-        #Reseting the highlighted data
-        self.highlight_data(self._highlighted_data, erase=True, update_chart=False)
+        # Reseting the highlighted data
+        self.highlight_data(self._highlighted_data,
+                            erase=True, update_chart=False)
 
         if update_chart:
             self.update_chart(data_changed=True)
@@ -177,10 +195,10 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
     def set_point_names(self, point_names):
         """
         Sets the names of the points to shown when the tooltip is rendered. If
-        set to None, then the tooltip will be disabled, however, tooltip related
-        events will still be emitted. No checking is done to see if the amount
-        of names is the same as the number of points. It is the user's duty to
-        check this.
+        set to None, then the tooltip will be disabled, however, tooltip
+        related events will still be emitted. No checking is done to see if the
+        amount of names is the same as the number of points. It is the user's
+        duty to check this.
 
         Parameters
         ----------
@@ -255,7 +273,11 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
 
     def set_tooltip_enabled(self, enable):
         """
-        Sets wheter the tooltip will be shown when the mouse hovers a data point.
+        Sets wheter the tooltip will be shown when the mouse hovers a data
+        point.
+
+        Parameters
+        ----------
         enable: boolean
             True to enable, False to disable.
         """
@@ -272,7 +294,8 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
                                     last update.
             selection_changed: boolean - Indicates if new data were selected.
         """
-        if 'selection_changed' in kwargs and kwargs['selection_changed'] is True:
+        if ('selection_changed' in kwargs and
+                kwargs['selection_changed'] is True):
             bg_alpha = 0.3
             if not self.highlighted_data:
                 bg_alpha = 1.0
@@ -296,7 +319,8 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
             plot_params = self._plot_params
             for i, p in enumerate(self.data):
                 plot_params['c'] = self._points_colors[i]
-                self._point_artists[i] = self.axes.scatter(x=p[0], y=p[1], **plot_params)
+                self._point_artists[i] = self.axes.scatter(
+                    x=p[0], y=p[1], **plot_params)
 
             self.update_chart(selection_changed=True)
 
@@ -356,13 +380,13 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
                 palette.setColor(QPalette.ToolTipText, QColor(0, 0, 0))
                 QToolTip.setPalette(palette)
                 QToolTip.setFont(QFont('Arial', 14, QFont.Bold))
-                pos = self.mapToGlobal(QPoint(event.x, self.height() - event.y))
-                QToolTip.showText(pos, '{}'.format(self.point_names[hover_idx]))
+                pos = self.mapToGlobal(
+                    QPoint(event.x, self.height() - event.y))
+                QToolTip.showText(pos, '{}'.format(
+                    self.point_names[hover_idx]))
+                self.tooltip_drawn.emit(self.name, hover_idx)
             else:
                 QToolTip.hideText()
-
-            #if self._cb_notify_tooltip:
-            #    self._cb_notify_tooltip(self.name, hover_idx)
 
     def cb_mouse_button(self, event):
         pass
@@ -370,9 +394,9 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
     def cb_mouse_scroll(self, event):
         pass
 
-    #--------------------------------------------------------------------------
+    # ------------------------------------------------------------------------
     # Private methods
-    #--------------------------------------------------------------------------
+    # ------------------------------------------------------------------------
     def _connect_cb(self):
         """
         Connects the callbacks to the matplotlib canvas.
@@ -384,9 +408,9 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
             'button_press_event', self.cb_mouse_button)
         self._cb_scrollwheel_id = fig.canvas.mpl_connect(
             'scroll_event', self.cb_mouse_scroll)
-        #self._cb_axes_leave_id = fig.canvas.mpl_connect(
+        # self._cb_axes_leave_id = fig.canvas.mpl_connect(
         #    'axes_leave_event', self.cb_axes_leave)
-        #self._cb_fig_leave_id = fig.canvas.mpl_connect(
+        # self._cb_fig_leave_id = fig.canvas.mpl_connect(
         #    'figure_leave_event', self.cb_axes_leave)
 
     def _disconnect_cb(self):
@@ -410,10 +434,12 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
             fig.canvas.mpl_disconnect(self._cb_fig_leave_id)
             self._cb_fig_leave_id = None
 
+
 def main():
-    from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QComboBox, QLineEdit,
-                                 QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout, QSlider,
-                                 QMessageBox, QCheckBox, QLabel, QStyleFactory)
+    from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QComboBox,
+                                 QLineEdit, QPushButton, QVBoxLayout,
+                                 QHBoxLayout, QFormLayout, QCheckBox, QLabel,
+                                 QStyleFactory)
     from PyQt5 import QtCore
     from PyQt5.QtCore import Qt
     import sys
@@ -433,7 +459,7 @@ def main():
             'Topological': 'gist_earth',
             'Ocean': 'ocean',
             'Gist Stern': 'gist_stern',
-            'Terrain':'terrain',
+            'Terrain': 'terrain',
             'Blue to Magenta': 'cool',
         }
 
@@ -447,7 +473,7 @@ def main():
             'Winter',
             'Summer',
         ]
-        
+
         def __init__(self):
             super().__init__()
             self.left = 0
@@ -485,10 +511,14 @@ def main():
             if enable == Qt.Checked:
                 state = True
             self.chart.set_tooltip_enabled(state)
-            
+
+        def cb_tooltip(self, name, idx):
+            print("Plot {} hovered the mouse over point {}".format(name, idx))
+
         def update_data(self):
             self.points = np.random.normal(size=(self.num_points, 2))
-            point_names = ['Points-' + str(i+1) for i in range(self.points.shape[0])]
+            point_names = ['Points-' + str(i + 1)
+                           for i in range(self.points.shape[0])]
             self.chart.set_data(self.points)
             self.chart.set_point_names(point_names)
 
@@ -499,6 +529,8 @@ def main():
             self.chart = ScatterChart(parent=self,
                                       canvas_name='scatter1',
                                       s=40)
+
+            self.chart.tooltip_drawn.connect(self.cb_tooltip)
 
             rand_data = QPushButton('Generate new data', self)
             rand_data.clicked.connect(self.update_data)
@@ -515,22 +547,24 @@ def main():
             xaxis_label.textChanged.connect(self.set_xaxis_label)
             yaxis_label = QLineEdit(self.chart.yaxis_label, self)
             yaxis_label.textChanged.connect(self.set_yaxis_label)
-            
 
             self.main_widget = QWidget(self)
             l = QHBoxLayout(self.main_widget)
 
             form_layout = QFormLayout(self.main_widget)
             form_layout.addRow(QLabel('Colormap', self.main_widget), colormap)
-            form_layout.addRow(QLabel('Plot title', self.main_widget), plot_title)
-            form_layout.addRow(QLabel('X axis label', self.main_widget), xaxis_label)
-            form_layout.addRow(QLabel('Y axis label', self.main_widget), yaxis_label)
-            
+            form_layout.addRow(
+                QLabel('Plot title', self.main_widget), plot_title)
+            form_layout.addRow(
+                QLabel('X axis label', self.main_widget), xaxis_label)
+            form_layout.addRow(
+                QLabel('Y axis label', self.main_widget), yaxis_label)
+
             panel_layout = QVBoxLayout(self.main_widget)
             panel_layout.addLayout(form_layout)
             panel_layout.addWidget(enable_tooltip)
             panel_layout.addWidget(rand_data)
-            
+
             l.addWidget(self.chart)
             l.addLayout(panel_layout)
 
@@ -544,6 +578,7 @@ def main():
     ex = TestWidget()
     ex.show()
     sys.exit(app.exec_())
-            
+
+
 if __name__ == '__main__':
     main()
