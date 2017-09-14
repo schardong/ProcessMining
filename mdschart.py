@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+This module contains the classes needed to create a Qt5 based scatter chart
+using matplotlib to create the chart itself. This chart gives support for
+selecting data points both individually and in convex regions of the plane.
+"""
+
 from copy import deepcopy
 import numpy as np
 from matplotlib import cm
@@ -8,10 +14,10 @@ from matplotlib.backends.backend_qt5agg import \
     FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib.path import Path
+from matplotlib.patches import Polygon
 from PyQt5.QtCore import QPoint, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QPalette
 from PyQt5.QtWidgets import QSizePolicy, QToolTip
-from scipy.spatial import ConvexHull
 
 from brushableplot import BrushableCanvas
 
@@ -24,11 +30,28 @@ class PolygonSelection(object):
     stored here."
     """
 
-    def __init__(self, axes):
+    def __init__(self, axes, data=None):
         self._axes = axes
+        self._data = data
+        self._hull_coords = []
         self._hull_points_art = []
         self._hull_lines_art = []
-        self._hull_coords = []
+        self._polygon = None
+        self._point_plot_params = {'marker': '+', 'c': 'gray'}
+        self._line_plot_params = {
+            'linestyle': 'dashed', 'linewidth': 3.0, 'c': 'gray'}
+
+    def __del__(self):
+        self._data = None
+        self._hull_coords = None
+        self._point_plot_params = None
+        self._line_plot_params = None
+        for art in self._hull_points_art:
+            self.axes.collections.remove(art)
+        for art in self._hull_lines_art:
+            self.axes.lines.remove(art)
+        self._hull_points_art = None
+        self._hull_lines_art = None
 
     @property
     def axes(self):
@@ -37,6 +60,13 @@ class PolygonSelection(object):
     @property
     def hull_coords(self):
         return self._hull_coords
+
+    @property
+    def polygon(self):
+        return self._polygon
+
+    def set_data(self, data):
+        self._data = data
 
     def add_hull_point(self, coords):
         """
@@ -48,8 +78,16 @@ class PolygonSelection(object):
         coords : list
             A list with the X and Y data coordinates of the new point.
         """
+        self._hull_coords.append(coords)
+        art_p = self.axes.scatter(
+            coords[0], coords[1], **self._point_plot_params)
+        self._hull_points_art.append(art_p)
 
-        self.axes.draw()
+        if len(self.hull_coords) > 1:
+            xcoord = [self.hull_coords[-2][0], self.hull_coords[-1][0]]
+            ycoord = [self.hull_coords[-2][1], self.hull_coords[-1][1]]
+            art_l = self.axes.plot(xcoord, ycoord, **self._line_plot_params)
+            self._hull_lines_art.extend(art_l)
 
     def move_hull_point(self, pidx, new_coords):
         """
@@ -64,7 +102,6 @@ class PolygonSelection(object):
         if pidx < 0 or pidx > len(self.hull_coords):
             raise ValueError(
                 'Index out of range (0, {})'.format(len(self.hull_coords)))
-        self.axes.draw()
 
     def del_hull_point(self, pidx):
         """
@@ -79,14 +116,28 @@ class PolygonSelection(object):
         if pidx < 0 or pidx > len(self.hull_coords):
             raise ValueError(
                 'Index out of range (0, {})'.format(len(self.hull_coords)))
-        self.axes.draw()
 
     def finish_hull(self):
         """
         Method to close the hull and calculate the set of data points inside
         it. Returns a list of indices of points inside the hull.
         """
-        pass
+        # First, we close the hull.
+        xcoord = [self.hull_coords[-1][0], self.hull_coords[0][0]]
+        ycoord = [self.hull_coords[-1][1], self.hull_coords[0][1]]
+        art_l = self.axes.plot(xcoord, ycoord, **self._line_plot_params)
+        self._hull_lines_art.extend(art_l)
+        self.axes.figure.canvas.draw()
+
+        # Now we build a matplotlib.patches.Polygon and test the data points.
+        self._polygon = Polygon(np.array(self.hull_coords))
+
+        inside = []
+        for i in range(self._data.shape[0]):
+            if self.polygon.contains_point(self._data[i, :]):
+                inside.append(i)
+
+        return inside
 
 
 class ScatterChart(FigureCanvas, BrushableCanvas):
@@ -154,6 +205,7 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         # Convex hull artists
         self._chull_points_art = []
         self._chull_lines_art = []
+        self._chulls = []
 
         # Callback IDs
         self._cb_mouse_move_id = None
@@ -421,7 +473,7 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
             bg_alpha = 0.15
             if not self.highlighted_data:
                 bg_alpha = 1.0
-            for col in self.axes.collections:
+            for col in self._point_artists:
                 col.set_alpha(bg_alpha)
 
             # Then, we highlight the selected data with a higher opacity.
@@ -509,56 +561,28 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         self.draw()
 
     def cb_mouse_press_event(self, event):
-        # First, check if the event was not over a convex hull point.
         if event.button == ScatterChart.MOUSE_BUTTONS['LEFT']:
-            if self._selection_finished:
-                self._chull = []
-                self._chull_points_art = []
-                self._chull_lines_art = []
-                self._selection_finished = False
-            # Add point to convex hull here.
-            self._chull.append([event.xdata, event.ydata])
+            if not self._chulls:
+                self._chulls = [PolygonSelection(self.axes, self.data)]
+            poly = self._chulls[-1]
+            poly.add_hull_point([event.xdata, event.ydata])
 
-            # Plotting the points/lines.
-            params_p = deepcopy(self._plot_params)
-            params_p['marker'] = '+'
-            params_p['c'] = 'gray'
-            chull_art_p = self.axes.scatter(
-                event.xdata, event.ydata, **params_p)
-            self._chull_points_art.append(chull_art_p)
-            params_p = None
-
-            if len(self._chull) > 1:
-                xcoord = [self._chull[-2][0], self._chull[-1][0]]
-                ycoord = [self._chull[-2][1], self._chull[-1][1]]
-
-                chull_art_l = self.axes.plot(
-                    xcoord, ycoord, ls='dashed', c='gray', lw=2)
-                self._chull_points_art.append(chull_art_l)
+        elif event.button == ScatterChart.MOUSE_BUTTONS['MID']:
+            idx = None
+            for i, hull in enumerate(self._chulls):
+                if not hull.hull_coords:
+                    continue
+                contains = hull.polygon.contains_point(
+                    [event.xdata, event.ydata])
+                if contains:
+                    idx = i
+                    break
+            if idx is not None:
+                del self._chulls[idx]
 
         elif event.button == ScatterChart.MOUSE_BUTTONS['RIGHT']:
-            self._selection_finished = True
-            # Plotting the last line of the hull.
-            xcoord = [self._chull[-1][0], self._chull[0][0]]
-            ycoord = [self._chull[-1][1], self._chull[0][1]]
-            chull_art_l = self.axes.plot(
-                xcoord, ycoord, ls='dashed', c='gray', lw=2)
-            self._chull_points_art.append(chull_art_l)
-
-            # Calculating the point's convex hull and confirming the selection.
-            pts = np.array(self._chull)
-            hull = ConvexHull(pts)
-            idx = hull.vertices
-            hull_path = Path(pts[idx])
-            to_erase = []
-            to_highlight = []
-            for i in range(self.data.shape[0]):
-                if hull_path.contains_point(self.data[i, :]):
-                    to_highlight.append(i)
-                else:
-                    to_erase.append(i)
-
-            self.highlight_data(to_erase, erase=True, update_chart=False)
+            to_highlight = self._chulls[-1].finish_hull()
+            self._chulls.append(PolygonSelection(self.axes, self.data))
             self.highlight_data(to_highlight, erase=False, update_chart=True)
 
         self.draw()
@@ -568,19 +592,20 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         This method processes a picking event. The highlighted point is marked
         and a notification is sent to the parent widget.
         """
-        to_erase = []
-        to_highlight = []
-        for i, art in enumerate(self._point_artists):
-            contains, _ = art.contains(event.mouseevent)
-            if contains:
-                if i in self.highlighted_data:
-                    to_erase.append(i)
-                else:
-                    to_highlight.append(i)
-        self.highlight_data(to_erase, erase=True, update_chart=False)
-        self.highlight_data(to_highlight, erase=False, update_chart=True)
-        self.notify_parent()
-        self.draw()
+        if event.mouseevent.button == ScatterChart.MOUSE_BUTTONS['LEFT']:
+            to_erase = []
+            to_highlight = []
+            for i, art in enumerate(self._point_artists):
+                contains, _ = art.contains(event.mouseevent)
+                if contains:
+                    if i in self.highlighted_data:
+                        to_erase.append(i)
+                    else:
+                        to_highlight.append(i)
+            self.highlight_data(to_erase, erase=True, update_chart=False)
+            self.highlight_data(to_highlight, erase=False, update_chart=True)
+            self.notify_parent()
+            self.draw()
 
     def cb_mouse_scroll_event(self, event):
         """
