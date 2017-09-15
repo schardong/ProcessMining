@@ -307,6 +307,9 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         self.highlight_data(self._highlighted_data,
                             erase=True, update_chart=False)
 
+        # Removing the existing hulls
+        self._chulls = []
+
         if update_chart:
             self.update_chart(data_changed=True)
 
