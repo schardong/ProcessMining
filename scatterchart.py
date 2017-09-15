@@ -8,12 +8,12 @@ selecting data points both individually and in convex regions of the plane.
 """
 
 from copy import deepcopy
+
 import numpy as np
 from matplotlib import cm
 from matplotlib.backends.backend_qt5agg import \
     FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from matplotlib.path import Path
 from matplotlib.patches import Polygon
 from PyQt5.QtCore import QPoint, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QPalette
@@ -37,6 +37,7 @@ class PolygonSelection(object):
         self._hull_points_art = []
         self._hull_lines_art = []
         self._polygon = None
+        self._highlighted_data = []
         self._point_plot_params = {'marker': '+', 'c': 'gray'}
         self._line_plot_params = {
             'linestyle': 'dashed', 'linewidth': 3.0, 'c': 'gray'}
@@ -65,6 +66,10 @@ class PolygonSelection(object):
     def polygon(self):
         return self._polygon
 
+    @property
+    def highlighted_data(self):
+        return self._highlighted_data
+
     def set_data(self, data):
         self._data = data
 
@@ -89,34 +94,6 @@ class PolygonSelection(object):
             art_l = self.axes.plot(xcoord, ycoord, **self._line_plot_params)
             self._hull_lines_art.extend(art_l)
 
-    def move_hull_point(self, pidx, new_coords):
-        """
-        Moves a hull point to new coordinates. Raises ValueError exception if
-        the index is out of range.
-
-        Parameters
-        ----------
-        pidx: int
-            The index of the point to be removed.
-        """
-        if pidx < 0 or pidx > len(self.hull_coords):
-            raise ValueError(
-                'Index out of range (0, {})'.format(len(self.hull_coords)))
-
-    def del_hull_point(self, pidx):
-        """
-        Removes a point from the hull. Raises ValueError exception if the
-        index is out of range.
-
-        Parameters
-        ----------
-        pidx: int
-            The index of the point to be removed.
-        """
-        if pidx < 0 or pidx > len(self.hull_coords):
-            raise ValueError(
-                'Index out of range (0, {})'.format(len(self.hull_coords)))
-
     def finish_hull(self):
         """
         Method to close the hull and calculate the set of data points inside
@@ -137,6 +114,7 @@ class PolygonSelection(object):
             if self.polygon.contains_point(self._data[i, :]):
                 inside.append(i)
 
+        self._highlighted_data = inside
         return inside
 
 
@@ -196,7 +174,7 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         # Point plot parameters. Adding missing parameters if needed.
         self._plot_params = kwargs
         if 'picker' not in self._plot_params:
-            self._plot_params['picker'] = 3.0
+            self._plot_params['picker'] = 1.0
         if 's' not in self._plot_params:
             self._plot_params['s'] = 40
 
@@ -207,8 +185,6 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         self._cb_mouse_press_id = None
         self._cb_pick_id = None
         self._cb_scrollwheel_id = None
-        self._cb_axes_leave_id = None
-        self._cb_fig_leave_id = None
 
         self._connect_cb()
 
@@ -433,21 +409,6 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         selected once the selection is confirmed by the user.
         """
         self._region_selection_enabled = state
-        fig = self.figure
-        if state:
-            if self._cb_pick_id:
-                fig.canvas.mpl_disconnect(self._cb_pick_id)
-                self._cb_pick_id = None
-
-            self._cb_mouse_press_id = fig.canvas.mpl_connect(
-                'button_press_event', self.cb_mouse_press_event)
-        else:
-            if self._cb_mouse_press_id:
-                fig.canvas.mpl_disconnect(self._cb_mouse_press_id)
-                self._cb_mouse_press_id = None
-
-            self._cb_pick_id = fig.canvas.mpl_connect(
-                'pick_event', self.cb_pick_event)
 
     def update_chart(self, **kwargs):
         """
@@ -556,6 +517,21 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         self.draw()
 
     def cb_mouse_press_event(self, event):
+        """
+        Process a mouse click event. Currently, this method only runs if the
+        region selection is enabled. This methods adds new regions (righ  mouse
+        click) or points to the current region of selection (left mouse click).
+        It is also possible to delete a selection using the middle mouse
+        button.
+
+        Parameters
+        ----------
+        event: matplotlib.backend_bases.MouseEvent
+            Data about the event
+        """
+        if not self.region_selection_enabled:
+            return
+
         if event.button == ScatterChart.MOUSE_BUTTONS['LEFT']:
             if not self._chulls:
                 self._chulls = [PolygonSelection(self.axes, self.data)]
@@ -573,6 +549,8 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
                     idx = i
                     break
             if idx is not None:
+                to_erase = self._chulls[idx].highlighted_data
+                self.highlight_data(to_erase, erase=True, update_chart=True)
                 del self._chulls[idx]
 
         elif event.button == ScatterChart.MOUSE_BUTTONS['RIGHT']:
@@ -584,9 +562,19 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
 
     def cb_pick_event(self, event):
         """
-        This method processes a picking event. The highlighted point is marked
-        and a notification is sent to the parent widget.
+        This method processes a picking event. Only processes if the region
+        selection option is disabled. If a user clicks a point in the plot,
+        that point will be highlighted. If the user clicks the same point
+        again, then that point will be erased. A notification will be sent to
+        the parent widget on both cases.
+
+        Parameters
+        ----------
+        event: matplotlib.backend_bases.PickEvent
+            Data about the event
         """
+        if self.region_selection_enabled:
+            return
         if event.mouseevent.button == ScatterChart.MOUSE_BUTTONS['LEFT']:
             to_erase = []
             to_highlight = []
@@ -616,21 +604,14 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         Connects the callbacks to the matplotlib canvas.
         """
         fig = self.figure
-        if self.region_selection_enabled:
-            self._cb_pick_id = fig.canvas.mpl_connect(
-                'pick_event', self.cb_pick_event)
-        else:
-            self._cb_mouse_press_id = fig.canvas.mpl_connect(
-                'button_press_event', self.cb_mouse_press_event)
-
+        self._cb_pick_id = fig.canvas.mpl_connect(
+            'pick_event', self.cb_pick_event)
+        self._cb_mouse_press_id = fig.canvas.mpl_connect(
+            'button_press_event', self.cb_mouse_press_event)
         self._cb_mouse_move_id = fig.canvas.mpl_connect(
             'motion_notify_event', self.cb_mouse_motion_event)
         self._cb_scrollwheel_id = fig.canvas.mpl_connect(
             'scroll_event', self.cb_mouse_scroll_event)
-        # self._cb_axes_leave_id = fig.canvas.mpl_connect(
-        #    'axes_leave_event', self.cb_axes_leave)
-        # self._cb_fig_leave_id = fig.canvas.mpl_connect(
-        #    'figure_leave_event', self.cb_axes_leave)
 
     def _disconnect_cb(self):
         """
@@ -646,12 +627,6 @@ class ScatterChart(FigureCanvas, BrushableCanvas):
         if self._cb_scrollwheel_id:
             fig.canvas.mpl_disconnect(self._cb_scrollwheel_id)
             self._cb_scrollwheel_id = None
-        if self._cb_axes_leave_id:
-            fig.canvas.mpl_disconnect(self._cb_axes_leave_id)
-            self._cb_axes_leave_id = None
-        if self._cb_fig_leave_id:
-            fig.canvas.mpl_disconnect(self._cb_fig_leave_id)
-            self._cb_fig_leave_id = None
 
 
 def main():
