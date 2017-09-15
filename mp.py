@@ -35,8 +35,19 @@ class BaseProjection(object):
         """
         return self._proj_data
 
+    @property
+    def name(self):
+        """
+        Returns the name of the projection.
+        """
+        return self._name
+
     def calc_projection_fitness(self):
         """
+        Returns the fitness of the projection. A high fitness means that the
+        projected data corresponds well to the original data.
+
+        This method must be implemented in the subclasses.
         """
         raise NotImplementedError('Method must be implemented by a subclass.')
 
