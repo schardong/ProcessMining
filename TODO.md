@@ -1,14 +1,14 @@
 # TO-DO
 ## ScatterChart
 * Multiple polygon selections
-  [ ] Add option to add several selections;
-  [ ] Add option to remove a selection;
+  [X] Add option to add several selections;
+  [X] Add option to remove a selection;
   [ ] Add option to move a polygon selection.
 
 * Polygon selection
-  [ ] Add option to remove a point;
-  [ ] Add option to move a point;
-  [ ] Remove the convex hull constraint.
+  [ ] Add option to remove a point (POSTPONED DUE TOO MUCH WORK);
+  [ ] Add option to move a point (POSTPONED DUE TOO MUCH WORK);
+  [X] Remove the convex hull constraint.
 
 * Dataset
   [ ] Add option to add point sets instead of rewritting the data;
