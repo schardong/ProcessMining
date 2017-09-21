@@ -22,15 +22,15 @@ if __name__ == '__main__':
     # tecle s para salvar
     # tecle z para limpar seleção
 
-    weights = [1.0,0.5,0.0,0.5,1.0,0.0]
+    weights = [1.0,0.5,0.0,0.5,0.0,1.0]
     #sample size
-    size = 10000
-
+    size = 31409
 
     #params = size of sample set and list of weight
     data = dataprovider.DataProvider(size, weights)
-    endsit = data.GetEndSituation()
     dots = data.Calculate()
+    print(dots)
+    endsit = data.GetEndSituation()
 
     # using Multidimensional Scalling
     mds = learn.mdsClass()
@@ -49,15 +49,16 @@ if __name__ == '__main__':
     plot2.saveCallback(data.SaveExportedData)
     plot2.drawPlot(size, d, endsit)
 
+    #del dots
     #using Spectral embedding for non-linear dimensionality reduction.
 
-    spe = learn.spectralEmbeddingClass()
-    pos3 = spe.genSPE(dots)
-    d = 2 * (pos3 - np.max(pos3)) / -np.ptp(pos3) - 1
-    print(d)
-    plot3 = learn.chart("Spectral_embedding")
-    plot3.saveCallback(data.SaveExportedData)
-    plot3.drawPlot(size, d, endsit)
+    #spe = learn.spectralEmbeddingClass()
+    #pos3 = spe.genSPE(dots)
+    #d = 2 * (pos3 - np.max(pos3)) / -np.ptp(pos3) - 1
+    #print(d)
+    #plot3 = learn.chart("Spectral_embedding")
+    #plot3.saveCallback(data.SaveExportedData)
+    #plot3.drawPlot(size, d, endsit)
 
     #mostra todos os gráficos
     plt.show()

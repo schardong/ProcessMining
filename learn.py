@@ -8,6 +8,7 @@ import copy
 from scipy.spatial import ConvexHull
 import numpy as np
 from matplotlib.path import Path
+from scipy.spatial.distance import squareform
 import sys
 
 
@@ -17,7 +18,7 @@ class mdsClass(object):
 
     def mdsGen(self, data):
         print("initializing MDS")
-        mds = manifold.MDS(n_components=2, metric=True, n_init=4, max_iter=100, n_jobs=8, dissimilarity="precomputed")
+        mds = manifold.MDS(n_components=2, metric=True, dissimilarity="precomputed")
         self.pos = mds.fit(data).embedding_
         return self.pos
 
@@ -130,9 +131,9 @@ class chart(object):
     def drawPlot(self, size, pos, endsit):
         self.pos = np.array(pos)
         self.fig, self.ax = plt.subplots()
-        self.endsit = endsit
         labels = ['Aproved', 'Denied', 'Canceled']
-        self.coll = self.ax.scatter(pos[:, 0], pos[:, 1], c=endsit, cmap='brg', picker=5, alpha=0.7,
+        self.endsit = endsit
+        self.coll = self.ax.scatter(pos[:, 0], pos[:, 1], c=self.endsit, cmap='brg', picker=5, alpha=0.7,
                                     edgecolors='none')
         plt.axis([-1, 1, -1, 1])
         green_patch = mpatches.Patch(color='blue', label='Aproved')
